@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JUSTWORK - Resume Evaluator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    <style>
+        .handshake-image {
+            width: 100%;
+            max-width: 350px;
+            height: auto;
+            animation: handshakeFloat 3s ease-in-out infinite, fadeInScale 1s ease-out;
+        }
+
+        @keyframes handshakeFloat {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        @keyframes fadeInScale {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Custom Alert Modal -->
+    <div class="custom-alert-overlay" id="customAlertOverlay">
+        <div class="custom-alert" id="customAlert">
+            <div class="custom-alert-header">
+                <div class="custom-alert-icon" id="customAlertIcon"></div>
+                <h3 class="custom-alert-title" id="customAlertTitle"></h3>
+            </div>
+            <div class="custom-alert-message" id="customAlertMessage"></div>
+            <button class="custom-alert-button" id="customAlertButton">OK</button>
+        </div>
+    </div>
+
+    <!-- Consent Modal -->
+    <div class="consent-modal-overlay" id="consentModalOverlay">
+        <div class="consent-modal" id="consentModal">
+            <div class="consent-modal-header">
+                <h3 class="consent-modal-title">Data Privacy Consent</h3>
+            </div>
+            <div class="consent-modal-content">
+                <label class="consent-modal-checkbox">
+                    <input type="checkbox" id="consentModalCheckbox" onchange="toggleConsentAcceptButton()">
+                    <div class="consent-modal-text">
+                        <strong>-PDPA 2010 Compliance</strong><br><br>
+                        I hereby consent to the collection, processing, and use of my personal data contained in the uploaded resume for the purpose of evaluation and assessment. I understand that:
+                        <ul>
+                            <li>My personal information will be processed in accordance with the Personal Data Protection Act 2010 (PDPA) of Malaysia</li>
+                            <li>The data will be used solely for resume evaluation purposes</li>
+                            <li>I have the right to access, correct, or withdraw my consent at any time</li>
+                            <li>The data will be kept secure and confidential</li>
+                            <li>The data will not be disclosed to third parties without my consent</li>
+                        </ul>
+                        By checking this box, I confirm that I have read and agree to the processing of my personal data.
+                    </div>
+                </label>
+                <div class="consent-modal-error" id="consentModalError">Please check the box to accept the consent</div>
+            </div>
+            <div class="consent-modal-buttons">
+                <button class="consent-modal-button decline" onclick="closeConsentModal()">Decline</button>
+                <button class="consent-modal-button accept" id="consentAcceptBtn" onclick="acceptConsent()" disabled>Accept & Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Home Section -->
+    <section id="home">
+        <!-- Navigation -->
+        <nav>
+            <ul>
+                <li><a onclick="scrollToSection('home')">Home</a></li>
+                <li><a onclick="scrollToSection('results')">Result & Question</a></li>
+            </ul>
+        </nav>
+
+        <div class="home-content">
+            <h1>JUSTWORK</h1>
+            <p class="subtitle">Justice with Work</p>
+            <button class="cta-button" onclick="scrollToSection('upload')">Resume Form</button>
+        </div>
+        <div class="home-illustration">
+            <img src="Handshake.png" alt="Handshake" class="handshake-image">
+        </div>
+    </section>
+
+    <!-- Upload Section -->
+    <section id="upload">
+        <!-- Navigation -->
+        <nav>
+            <ul>
+                <li><a onclick="scrollToSection('home')">Home</a></li>
+                <li><a onclick="scrollToSection('results')">Result & Question</a></li>
+            </ul>
+        </nav>
+
+        <div class="container">
+            <h2>Upload Resume</h2>
+
+            <div class="drop-zone" id="dropZone">
+                <h3>Drag and drop file to Upload</h3>
+                <input type="file" id="fileInput" accept="application/pdf">
+            </div>
+
+            <div class="file-info" id="fileInfo">
+                <div>
+                    <strong>Selected file:</strong> <span id="fileName"></span>
+                    <div class="file-size" id="fileSize"></div>
+                </div>
+                <button class="file-clear" onclick="clearFile()" title="Clear file">&times;</button>
+            </div>
+
+            <button class="btn-evaluate" id="evaluateBtn" onclick="showConsentModal()">
+                Evaluate Resume
+            </button>
+
+            <div id="uploadStatus"></div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results">
+        <!-- Navigation -->
+        <nav>
+            <ul>
+                <li><a onclick="scrollToSection('home')">Home</a></li>
+                <li><a onclick="scrollToSection('results')">Result & Question</a></li>
+            </ul>
+        </nav>
+
+        <div class="results-container">
+            <h2>Evaluation Results</h2>
+
+            <div class="result-output" id="resultOutput"></div>
+
+            <!-- Gender Weight Configuration -->
+            <div class="gender-weights">
+                <h3>Gender Head Count</h3>
+                <table class="gender-table">
+                    <thead>
+                        <tr>
+                            <th>Gender</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><label for="maleWeight">Male</label></td>
+                            <td><input type="number" id="maleWeight" class="gender-input" min="0" max="100" value="60" placeholder="0-100"></td>
+                        </tr>
+                        <tr>
+                            <td><label for="femaleWeight">Female</label></td>
+                            <td><input type="number" id="femaleWeight" class="gender-input" min="0" max="100" value="40" placeholder="0-100"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="question-matrix">
+                <h3>Question Matrix</h3>
+                <div id="questionList"></div>
+                <button class="btn-add-question" onclick="addQuestion()">+ Add New Question</button>
+            </div>
+        </div>
+    </section>
+
+    <script src="js/handshake-animation.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

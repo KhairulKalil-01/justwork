@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume evaluator (LLM-Judge with guided matrix scoring)</title>
+    <style>
+        /* --- General Layout Styles --- */
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Changed from center to allow scrolling if long */
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px 0;
+        }
+
+        .main-container {
+            background-color: white;
+            width: 700px; /* Slightly wider to accommodate extraction text */
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 1px solid #ddd;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .divider {
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 30px 0;
+        }
+
+        /* --- PDF Upload Section Styles --- */
+        .upload-section {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px dashed #ccc;
+            text-align: center;
+        }
+
+        #pdfInput {
+            margin-bottom: 10px;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #e0e0e0;
+            padding: 1rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            display: none; /* Hidden by default */
+            border-radius: 6px;
+            text-align: left;
+            margin-top: 15px;
+            max-height: 200px; /* Scrollable if too long */
+            overflow-y: auto;
+            font-size: 13px;
+        }
+
+        /* --- Question Matrix Styles --- */
+        .question-box {
+            background-color: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .input-text {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+            flex-grow: 1;
+        }
+
+        .input-weight {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+            width: 80px;
+            text-align: center;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #007bff;
+            background-color: #fff;
+        }
+
+        /* --- Buttons --- */
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            font-size: 14px;
+        }
+
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-primary:hover:not(:disabled) { background-color: #0056b3; }
+
+        .btn-full-width {
+            width: 100%;
+        }
+
+        .btn-delete {
+            background-color: #ff4d4d;
+            color: white;
+            padding: 5px 10px;
+            font-size: 12px;
+            align-self: flex-end;
+            width: fit-content;
+        }
+
+        .btn-delete:hover { background-color: #cc0000; }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+
+        <h2>Resume Evaluator (LLM-Judge with guided matrix scoring)</h2>
+        <div class="upload-section">
+            <input type="file" id="pdfInput" accept="application/pdf">
+            <button onclick="uploadPDF()" id="uploadBtn" class="btn-primary">Evaluate</button>
+            <div id="status"></div>
+
+        </div>
+        <div class="divider"></div>
+        <h2>Result Scoring</h2>
+        <pre id="resultOutput"></pre>
+        <div class="divider"></div>
+
+        <h2>Question Matrix</h2>
+        <div id="question-list">
+            </div>
+
+        <button class="btn-primary btn-full-width" onclick="addNewQuestion()">+ Add New Question</button>
+    </div>
+
+    <script>
+        // ==========================================
+        // PART 1: PDF UPLOAD LOGIC
+        // ==========================================
+        async function uploadPDF() {
+            const fileInput = document.getElementById('pdfInput');
+            const statusDiv = document.getElementById('status');
+            const resultOutput = document.getElementById('resultOutput');
+            const btn = document.getElementById('uploadBtn');
+
+            // 1. Validation
+            if (fileInput.files.length === 0) {
+                alert("Please select a file first!");
+                return;
+            }
+
+            // 2. Gather Question Data (Same logic as submitQuestions)
+            const boxes = document.querySelectorAll('.question-box');
+            const questionsPayload = [];
+            boxes.forEach(box => {
+                const qText = box.querySelector('.input-text').value.trim();
+                const qWeight = box.querySelector('.input-weight').value.trim();
+                if (qText || qWeight) {
+                    questionsPayload.push({
+                        question: qText,
+                        weightage: Number(qWeight) || 0
+                    });
+                }
+            });
+
+            // 3. Prepare FormData
+            const file = fileInput.files[0];
+            const formData = new FormData();
+
+            // Append the File
+            formData.append("file", file);
+
+            // Append the JSON data as a STRING
+            // Backend will receive this string and parse it back to JSON
+            formData.append("questions_data", JSON.stringify(questionsPayload));
+
+            // UI Updates
+            btn.disabled = true;
+            statusDiv.innerText = "Processing... (This may take a few seconds)";
+            resultOutput.style.display = 'none';
+
+            try {
+                const response = await fetch('https://tabular-denver-actually.ngrok-free.dev/process-docling2/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        // IMPORTANT: Do NOT set 'Content-Type': 'application/json' here.
+                        // The browser automatically sets it to 'multipart/form-data' with the correct boundary.
+                        "ngrok-skip-browser-warning": "true"
+                    }
+                });
+
+                if (!response.ok) {
+                    let errorMessage = "Upload failed";
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || errorMessage;
+                    } catch (e) {}
+                    throw new Error(errorMessage);
+                }
+
+                const data = await response.json();
+
+                statusDiv.innerText = "Success!";
+                resultOutput.textContent = data.markdown_content;
+                resultOutput.style.display = 'block';
+
+                console.log("Server parsed questions:", data.received_questions);
+
+            } catch (error) {
+                statusDiv.innerText = "Error: " + error.message;
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // ==========================================
+        // PART 2: QUESTION MATRIX LOGIC
+        // ==========================================
+        const questionList = document.getElementById('question-list');
+        let questionCount = 0;
+
+        function createQuestionElement(placeholderText = "", defaultWeight = "") {
+            questionCount++;
+
+            // 1. Create the outer wrapper
+            const box = document.createElement('div');
+            box.className = 'question-box';
+            box.id = `box-${questionCount}`;
+
+            // 2. Create the label
+            const label = document.createElement('label');
+            label.innerText = `Question ${questionCount}`; // Added number for clarity
+
+            // 3. Create a Row container for inputs
+            const row = document.createElement('div');
+            row.className = 'input-row';
+
+            // 4. Create Question Input (Text)
+            const inputQ = document.createElement('input');
+            inputQ.type = 'text';
+            inputQ.className = 'input-text';
+            inputQ.placeholder = "Enter question text...";
+            inputQ.value=placeholderText
+            // 5. Create Weightage Input (Number)
+            const inputW = document.createElement('input');
+            inputW.type = 'number';
+            inputW.className = 'input-weight';
+            inputW.placeholder = "Pts";
+            inputW.value = defaultWeight;
+            inputW.title = "Weightage / Points";
+
+            // 6. Create Delete Button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn-delete';
+            deleteBtn.innerText = "Remove";
+            deleteBtn.onclick = function() {
+                box.remove();
+                questionCount--;
+            };
+
+            // 7. Assemble
+            row.appendChild(inputQ);
+            row.appendChild(inputW);
+
+            box.appendChild(label);
+            box.appendChild(row);
+            box.appendChild(deleteBtn);
+
+            return box;
+        }
+
+        function addNewQuestion() {
+            const newBox = createQuestionElement();
+            questionList.appendChild(newBox);
+        }
+
+        // Initialize with example data
+        window.onload = function() {
+            questionList.appendChild(createQuestionElement("Does the candidate have background in deep learning", "20"));
+            questionList.appendChild(createQuestionElement("Does the candidate studies in UKM/UPM/UM/USM", "10"));
+            questionList.appendChild(createQuestionElement("Does the candidate is a female", "10"));
+            questionList.appendChild(createQuestionElement("Does the candidate graduate with distinction", "15"));
+        }
+    </script>
+
+</body>
+</html>
